@@ -16,12 +16,14 @@
     #ruffle {
       width: 100%;
       height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden; /* hide parts that go outside */
     }
     #player {
-      width: 100% !important;
-      height: 100% !important;
-      object-fit: contain; /* keep aspect ratio while filling screen */
-      display: block;
+      transform: scale(1.8); /* 🔥 zoom level: increase to zoom in more */
+      transform-origin: center center; /* zoom from the center */
     }
   </style>
 </head>
@@ -34,10 +36,9 @@
     window.addEventListener("load", () => {
       const ruffle = window.RufflePlayer.newest();
       const player = ruffle.createPlayer();
-      const container = document.getElementById("ruffle");
       player.id = "player";
-      container.appendChild(player);
-      player.load("redball4.swf"); // must be in the same folder as this HTML
+      document.getElementById("ruffle").appendChild(player);
+      player.load("redball4.swf"); // same folder as HTML
     });
   </script>
 </body>
