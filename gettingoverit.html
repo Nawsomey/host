@@ -1,314 +1,173 @@
 <!DOCTYPE html>
 <html lang="en-us">
-  <head>
+
+<head>
     <base href="https://cdn.jsdelivr.net/gh/genizy/web-port@main/getting-over-it/">
-    <meta charset="utf-8" />
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity WebGL Player | Getting Over It</title>
-    <link rel="shortcut icon" href="TemplateData/favicon.ico" />
-    <link rel="stylesheet" href="TemplateData/style.css" />
-
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <link rel="stylesheet" href="TemplateData/style.css">
     <style>
-      html,
-      body {
-        margin: 0;
-        padding: 0;
-        height: 100%;
-        width: 100%;
-        overflow: hidden;
-        background: #d3d3d3; /* light grey background */
-      }
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            border: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            background: #231F20;
+        }
 
-      #unity-canvas {
-        width: 100%;
-        height: 100%;
-        display: block;
-      }
-
-      /* Draggable Terminal Loader */
-      .terminal-loader {
-        border: 0.1em solid #333;
-        background-color: #1a1a1a;
-        color: #0f0;
-        font-family: "Courier New", Courier, monospace;
-        font-size: 1em;
-        padding: 1.5em 1em;
-        width: 14em;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-        border-radius: 4px;
-        position: absolute;
-        overflow: hidden;
-        box-sizing: border-box;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        cursor: move;
-        text-align: left;
-      }
-
-      .terminal-header {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 1.5em;
-        background-color: #333;
-        border-top-left-radius: 4px;
-        border-top-right-radius: 4px;
-        padding: 0 0.4em;
-        box-sizing: border-box;
-        cursor: grab;
-      }
-
-      .terminal-controls {
-        float: right;
-      }
-
-      .control {
-        display: inline-block;
-        width: 0.6em;
-        height: 0.6em;
-        margin-left: 0.4em;
-        border-radius: 50%;
-        background-color: #777;
-      }
-
-      .control.close {
-        background-color: #e33;
-      }
-
-      .control.minimize {
-        background-color: #ee0;
-      }
-
-      .control.maximize {
-        background-color: #0b0;
-      }
-
-      .terminal-title {
-        float: left;
-        line-height: 1.5em;
-        color: #eee;
-      }
-
-      #terminal-progress {
-        width: 100%;
-        height: 10px;
-        background: #222;
-        border: 1px solid #0f0;
-        margin-top: 2em;
-        border-radius: 3px;
-        overflow: hidden;
-      }
-
-      #terminal-progress-fill {
-        height: 100%;
-        width: 0%;
-        background: #0f0;
-        transition: width 0.2s linear;
-      }
-
-      #unity-container {
-        display: none;
-      }
+        #unity-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
     </style>
-  </head>
+</head>
 
-  <body>
-    <!-- Terminal Loader -->
-    <div id="loading-text">
-      <div class="terminal-loader" id="terminal-loader">
-        <div class="terminal-header" id="terminal-header">
-          <div class="terminal-title">Status</div>
-          <div class="terminal-controls">
-            <div class="control close"></div>
-            <div class="control minimize"></div>
-            <div class="control maximize"></div>
-          </div>
-        </div>
-        <div id="terminal-line" style="margin-top: 2em;">Loading...</div>
-        <div id="terminal-progress">
-          <div id="terminal-progress-fill"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Unity Game -->
+<body>
+    <div id="loading-text" style="color: white; font-size: 48px; font-family: cursive; text-align: center; margin-top: 20px;"> LOADING... </div>
     <div id="unity-container" class="unity-desktop">
-      <canvas id="unity-canvas" tabindex="-1"></canvas>
-      <div id="unity-loading-bar">
-        <div id="unity-logo"></div>
-        <div id="unity-progress-bar-empty">
-          <div id="unity-progress-bar-full"></div>
+        <canvas id="unity-canvas" tabindex="-1"></canvas>
+        <div id="unity-loading-bar">
+            <div id="unity-logo"></div>
+            <div id="unity-progress-bar-empty">
+                <div id="unity-progress-bar-full"></div>
+            </div>
         </div>
-      </div>
     </div>
-
     <script>
-      const terminalLoader = document.getElementById("terminal-loader");
-      const terminalHeader = document.getElementById("terminal-header");
-      const terminalLine = document.getElementById("terminal-line");
-      const progressFill = document.getElementById("terminal-progress-fill");
-      const unityContainer = document.getElementById("unity-container");
+        const loadingText = document.querySelector("#loading-text");
+        let totalBytes = 0;
+        let loadedBytes = 0;
 
-      // Make terminal draggable (aligned with cursor)
-      (function makeDraggable(element, handle) {
-        let offsetX = 0,
-          offsetY = 0,
-          startX = 0,
-          startY = 0,
-          isDragging = false;
-
-        handle.addEventListener("mousedown", (e) => {
-          isDragging = true;
-          const rect = element.getBoundingClientRect();
-          element.style.transform = "none"; // remove center transform
-          startX = e.clientX;
-          startY = e.clientY;
-          offsetX = rect.left;
-          offsetY = rect.top;
-          handle.style.cursor = "grabbing";
-        });
-
-        document.addEventListener("mousemove", (e) => {
-          if (!isDragging) return;
-          const dx = e.clientX - startX;
-          const dy = e.clientY - startY;
-          element.style.left = offsetX + dx + "px";
-          element.style.top = offsetY + dy + "px";
-        });
-
-        document.addEventListener("mouseup", () => {
-          isDragging = false;
-          handle.style.cursor = "grab";
-        });
-      })(terminalLoader, terminalHeader);
-
-      // Unity loader logic
-      let totalBytes = 0;
-      let loadedBytes = 0;
-
-      function formatSize(bytes) {
-        if (bytes > 1024 * 1024 * 1024)
-          return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
-        else if (bytes > 1024 * 1024)
-          return (bytes / (1024 * 1024)).toFixed(2) + " MB";
-        else if (bytes > 1024)
-          return (bytes / 1024).toFixed(2) + " KB";
-        else return bytes + " B";
-      }
-
-      async function fetchWithProgress(url) {
-        const response = await fetch(url);
-        const reader = response.body.getReader();
-        let chunks = [];
-        let received = 0;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          received += value.length;
-          loadedBytes += value.length;
-          chunks.push(value);
-
-          const doneText = formatSize(loadedBytes);
-          const totalText = formatSize(totalBytes);
-          const percent =
-            totalBytes > 0
-              ? ((loadedBytes / totalBytes) * 100).toFixed(1)
-              : "?";
-
-          terminalLine.textContent = `Loading... ${doneText} / ${totalText} (${percent}%)`;
-          progressFill.style.width = percent + "%";
+        function formatSize(bytes) {
+            if (bytes > 1024 * 1024 * 1024) {
+                return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
+            } else if (bytes > 1024 * 1024) {
+                return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+            } else if (bytes > 1024) {
+                return (bytes / 1024).toFixed(2) + " KB";
+            } else {
+                return bytes + " B";
+            }
         }
 
-        let fullBuffer = new Uint8Array(received);
-        let offset = 0;
-        for (let chunk of chunks) {
-          fullBuffer.set(chunk, offset);
-          offset += chunk.length;
+        async function fetchWithProgress(url) {
+            const response = await fetch(url);
+            const reader = response.body.getReader();
+            let chunks = [];
+            let received = 0;
+            while (true) {
+                const {
+                    done,
+                    value
+                } = await reader.read();
+                if (done) break;
+                received += value.length;
+                loadedBytes += value.length;
+                chunks.push(value);
+                const doneText = formatSize(loadedBytes);
+                const totalText = formatSize(totalBytes);
+                const percent = totalBytes > 0 ? ((loadedBytes / totalBytes) * 100).toFixed(1) : "?";
+                loadingText.textContent = `LOADING... ${doneText} / ${totalText} (${percent}%)`;
+            }
+            let fullBuffer = new Uint8Array(received);
+            let offset = 0;
+            for (let chunk of chunks) {
+                fullBuffer.set(chunk, offset);
+                offset += chunk.length;
+            }
+            return fullBuffer.buffer;
         }
-        return fullBuffer.buffer;
-      }
-
-      async function mergeFiles(parts) {
-        const buffers = await Promise.all(parts.map(fetchWithProgress));
-        return URL.createObjectURL(new Blob(buffers));
-      }
-
-      function getParts(file, count) {
-        let parts = [];
-        for (let i = 1; i <= count; i++) parts.push(file + ".part" + i);
-        return parts;
-      }
-
-      (async () => {
-        const dataParts = getParts("Build/GettingOverIt.data", 32);
-        const wasmParts = getParts("Build/GettingOverIt.wasm", 2);
-        const allParts = [...dataParts, ...wasmParts];
-        totalBytes = 691732588;
-
-        const [dataUrl, wasmUrl] = await Promise.all([
-          mergeFiles(dataParts),
-          mergeFiles(wasmParts),
-        ]);
-
-        const container = document.querySelector("#unity-container");
-        const canvas = document.querySelector("#unity-canvas");
-        const loadingBar = document.querySelector("#unity-loading-bar");
-        const progressBarFull = document.querySelector(
-          "#unity-progress-bar-full"
-        );
-
-        const buildUrl = "Build";
-        const loaderUrl = buildUrl + "/GettingOverIt.loader.js";
-        const config = {
-          dataUrl: dataUrl,
-          frameworkUrl: buildUrl + "/GettingOverIt.framework.js",
-          codeUrl: wasmUrl,
-          streamingAssetsUrl: "StreamingAssets",
-          companyName: "Bennett Foddy",
-          productName: "Getting Over It",
-          productVersion: "1.7",
-        };
-
-        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-          const meta = document.createElement("meta");
-          meta.name = "viewport";
-          meta.content =
-            "width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes";
-          document.head.appendChild(meta);
-          container.className = "unity-mobile";
-          canvas.className = "unity-mobile";
-        } else {
-          const resizeCanvas = () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            canvas.style.width = window.innerWidth + "px";
-            canvas.style.height = window.innerHeight + "px";
-          };
-          window.addEventListener("resize", resizeCanvas);
-          resizeCanvas();
+        async function mergeFiles(parts) {
+            const buffers = await Promise.all(parts.map(fetchWithProgress));
+            return URL.createObjectURL(new Blob(buffers));
         }
 
-        loadingBar.style.display = "block";
+        function getParts(file, count) {
+            let parts = [];
+            for (let i = 1; i <= count; i++) {
+                parts.push(file + ".part" + i);
+            }
+            return parts;
+        }
+        (async () => {
+            const dataParts = getParts("Build/GettingOverIt.data", 32);
+            const wasmParts = getParts("Build/GettingOverIt.wasm", 2);
+            const allParts = [...dataParts, ...wasmParts];
+            totalBytes = 691732588;
+            const [dataUrl, wasmUrl] = await Promise.all([
+                mergeFiles(dataParts),
+                mergeFiles(wasmParts)
+            ]);
+            var container = document.querySelector("#unity-container");
+            var canvas = document.querySelector("#unity-canvas");
+            var loadingBar = document.querySelector("#unity-loading-bar");
+            var progressBarFull = document.querySelector("#unity-progress-bar-full");
+            var warningBanner = document.querySelector("#unity-warning");
 
-        const script = document.createElement("script");
-        script.src = loaderUrl;
-        script.onload = () => {
-          createUnityInstance(canvas, config, (progress) => {
-            progressBarFull.style.width = 100 * progress + "%";
-          })
-            .then(() => {
-              terminalLoader.remove();
-              unityContainer.style.display = "block";
-            })
-            .catch((message) => {
-              terminalLine.textContent = "Error: " + message;
-            });
-        };
-        document.body.appendChild(script);
-      })();
+            function unityShowBanner(msg, type) {
+
+            }
+
+            var buildUrl = "Build";
+            var loaderUrl = buildUrl + "/GettingOverIt.loader.js";
+            var config = {
+                dataUrl: dataUrl,
+                frameworkUrl: buildUrl + "/GettingOverIt.framework.js",
+                codeUrl: wasmUrl,
+                streamingAssetsUrl: "StreamingAssets",
+                companyName: "Bennett Foddy",
+                productName: "Getting Over It",
+                productVersion: "1.7",
+                showBanner: unityShowBanner,
+            };
+
+            if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+
+                var meta = document.createElement('meta');
+                meta.name = 'viewport';
+                meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
+                document.getElementsByTagName('head')[0].appendChild(meta);
+                container.className = "unity-mobile";
+                canvas.className = "unity-mobile";
+
+            } else {
+                const canvas = document.querySelector("canvas");
+
+                function resizeCanvas() {
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                    canvas.style.width = window.innerWidth + "px";
+                    canvas.style.height = window.innerHeight + "px";
+                }
+
+                window.addEventListener("resize", resizeCanvas);
+                resizeCanvas();
+            }
+
+            loadingBar.style.display = "block";
+
+            var script = document.createElement("script");
+            script.src = loaderUrl;
+            script.onload = () => {
+                createUnityInstance(canvas, config, (progress) => {
+                    progressBarFull.style.width = 100 * progress + "%";
+                }).then((unityInstance) => {
+                    loadingBar.style.display = "none";
+                    loadingText.remove();
+                }).catch((message) => {
+                    alert(message);
+                });
+            };
+
+            document.body.appendChild(script);
+        })();
     </script>
-  </body>
+</body>
+
 </html>
